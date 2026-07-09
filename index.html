@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>南村水厂数字孪生仿真系统</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Microsoft YaHei','PingFang SC',sans-serif;background:#1a1a2e;color:#e0e0e0;overflow:hidden;height:100vh;display:flex;flex-direction:column}
+/* === TOP BAR === */
+.top-bar{display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:linear-gradient(135deg,#16213e,#0f3460);border-bottom:2px solid #e94560;z-index:100;min-height:42px}
+.top-bar h1{font-size:15px;font-weight:700;color:#fff;letter-spacing:1px}
+.status-group{display:flex;gap:12px;font-size:11px}.status-item{color:#a0d2db;padding:2px 8px;border-radius:3px;background:rgba(255,255,255,.08)}
+.status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#4ecca3;margin-right:4px;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+#clk{font-weight:700;color:#fff}
+#ctlBtn{cursor:pointer;padding:3px 10px;border-radius:4px;background:#e94560;color:#fff;font-size:11px;border:none;margin-left:8px}#ctlBtn:hover{background:#c73e54}
+
+/* === SCENARIO BUTTONS === */
+.scenario-bar{display:flex;gap:6px;padding:6px 14px;background:rgba(22,33,62,.95);z-index:99;border-bottom:1px solid rgba(233,69,96,.3);flex-shrink:0}
+.s-btn{padding:5px 12px;border:1px solid #333;border-radius:4px;background:#1a1a2e;color:#ccc;font-size:11px;cursor:pointer;transition:.25s}
+.s-btn:hover,.s-btn.active{background:#e94560;color:#fff;border-color:#e94560}
+
+/* === MAIN LAYOUT === */
+.main-flex{display:flex;flex:1;overflow:hidden;position:relative}
+/* LEFT NAV */
+.nav-panel{width:200px;overflow-y:auto;padding:10px;background:rgba(22,33,62,.9);border-right:1px solid rgba(255,255,255,.08);z-index:98;scrollbar-width:thin}
+.nc-card{margin-bottom:6px;padding:8px;border-radius:5px;background:rgba(255,255,255,.05);border:1px solid transparent;cursor:pointer;transition:.2s}
+.nc-card:hover,.nc-card.active{background:rgba(233,69,96,.18);border-color:#e94560}
+.nc-name{font-size:11.5px;font-weight:600;color:#fff;margin-bottom:3px}
+.nc-phase{font-size:9px;color:#e94560;margin-bottom:2px}
+.nc-item{font-size:9.5px;color:#aaa;display:block;line-height:1.5}
+/* CENTER 3D */
+.view-area{flex:1;position:relative;background:#0d1117;overflow:hidden}
+#three-canvas{width:100%;height:100%;display:block}
+/* RIGHT DETAIL */
+.detail-panel{width:260px;overflow-y:auto;padding:12px;background:rgba(22,33,62,.92);border-left:1px solid rgba(255,255,255,.08);z-index:98}
+.dp-title{font-size:13px;font-weight:700;color:#fff;border-left:3px solid #e94560;padding-left:8px;margin-bottom:10px}
+.dp-table{width:100%;border-collapse:collapse;font-size:10.5px}
+.dp-table td{padding:4px 6px;border-bottom:1px solid rgba(255,255,255,.06)}
+.dp-table td:first-child{color:#888;width:40%}
+.dp-dev-list{list-style:none;padding:0}
+.dp-dev-list li{padding:5px 8px;margin-bottom:3px;background:rgba(255,255,255,.04);border-radius:4px;font-size:10px;display:flex;justify-content:space-between;align-items:center}
+.dev-status{width:8px;height:8px;border-radius:50%}.dev-on{background:#4ecca3;box-shadow:0 0 5px #4ecca3}.dev-off{background:#666}.dev-warn{background:#f39c12;box-shadow:0 0 5px #f39c12}
+/* BOTTOM DASHBOARD */
+.bottom-dash{height:150px;min-height:150px;background:linear-gradient(180deg,rgba(22,33,62,.97),rgba(15,52,96,.97));border-top:1px solid rgba(233,69,96,.35);display:flex;gap:8px;padding:8px 14px;z-index:99;overflow-x:auto;flex-shrink:0}
+.gauge-card{min-width:145px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:8px;text-align:center;flex:1;min-width:0}
+.gc-label{font-size:9.5px;color:#999;margin-bottom:4px}
+.gc-value{font-size:17px;font-weight:800;color:#4ecca3}
+.gc-sub{font-size:8.5px;color:#777;margin-top:2px}
+.trend-row{display:flex;gap:12px;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.06);font-size:9.5px;color:#aaa}
+.trend-row span{white-space:nowrap}
+
+/* INFO OVERLAY */
+.info-overlay{position:absolute;top:10px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.75);color:#fff;padding:6px 16px;border-radius:20px;font-size:12px;pointer-events:none;z-index:200;opacity:0;transition:opacity .3s}
+
+/* CONTROL PANEL MODAL */
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.65);z-index:900;justify-content:center;align-items:center}
+.modal-overlay.open{display:flex}
+.modal-box{background:#1a1a2e;border:1px solid #333;border-radius:10px;width:92%;max-width:1100px;max-height:88vh;overflow-y:auto;padding:20px;box-shadow:0 8px 40px rgba(0,0,0,.5)}
+.m-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;border-bottom:1px solid #333;padding-bottom:10px}
+.m-header h2{font-size:16px;color:#fff}
+.m-close{cursor:pointer;background:none;border:none;color:#999;font-size:22px;padding:0 6px}.m-close:hover{color:#e94560}
+.m-body{display:flex;gap:18px}
+.m-col{flex:1;min-width:0}
+.m-col h3{font-size:12px;color:#4ecca3;margin:8px 0 6px;padding-bottom:4px;border-bottom:1px solid rgba(78,204,163,.2)}
+.m-field{margin-bottom:6px}
+.m-field label{display:block;font-size:10px;color:#bbb;margin-bottom:2px}
+.m-field input[type=range]{width:100%;accent-color:#e94560}
+.m-field .m-val{text-align:right;font-size:10px;color:#fff;font-weight:700;display:inline-block;min-width:55px}
+.result-card{background:rgba(255,255,255,.04);border:1px solid #444;border-radius:6px;padding:10px;margin-bottom:10px}
+.rc-title{font-size:12px;font-weight:700;color:#e94560;margin-bottom:6px}
+.rm-row{display:flex;justify-content:space-between;font-size:10.5px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04)}
+.rm-ok{color:#4ecca3}.rm-bad{color:#e94560}.rm-warn{color:#f39c12}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="top-bar">
+  <h1>🏗 南村水厂数字孪生仿真系统 | 国电银河水务（青岛南村）</h1>
+  <div style="display:flex;align-items:center;gap:14px">
+    <div class="status-group"><span class="status-item"><span class="status-dot"></span>3D场景正常</span><span class="status-item"><span class="status-dot" style="background:#f39c12"></span>仿真运行中</span></div>
+    <span class="status-item">实时时钟 <span class="clock" id="clk"></span></span>
+    <button id="ctlBtn" onclick="toggleControlPanel()">⚙ 运行调控面板</button>
+  </div>
+</div>
+
+<!-- SCENARIOS -->
+<div class="scenario-bar" id="scenarios"></div>
+
+<!-- MAIN -->
+<div class="main-flex">
+  <!-- NAV -->
+  <nav class="nav-panel" id="navPanel"></nav>
+
+  <!-- 3D VIEWPORT -->
+  <div class="view-area">
+    <canvas id="three-canvas"></canvas>
+    <div class="info-overlay" id="infoOverlay"></div>
+  </div>
+
+  <!-- DETAIL -->
+  <aside class="detail-panel" id="detailPanel">
+    <div class="dp-title" id="dpTitle">构筑物详情</div>
+    <div id="dpBody"><p style="color:#666;font-size:11px">点击左侧构筑物或3D模型查看详情</p></div>
+  </aside>
+</div>
+
+<!-- DASHBOARD -->
+<div class="bottom-dash" id="dashBoard"></div>
+
+<!-- CONTROL PANEL MODAL -->
+<div class="modal-overlay" id="ctlModal">
+  <div class="modal-box">
+    <div class="m-header"><h2>⚙ 运行调控面板 — 实时核算</h2><button class="m-close" onclick="toggleControlPanel()">&times;</button></div>
+    <div class="m-body">
+      <div class="m-col" id="colInputs"></div>
+      <div class="m-col" id="colResults"></div>
+    </div>
+  </div>
+</div>
+
+<!-- LOCAL THREE.JS (no CDN dependency) -->
+<script src="three.min.js"></script>
+<script src="OrbitControls.js"></script>
+
+<script>
+// ============================================================
+//  南村水厂数字孪生 — 基于 PPTX 精确平面布置图重建
+//  数据来源：南村水厂平面布置图.pptx (image11=image10)
+// ============================================================
+
+// ---- 厂界定义（基于PPTX布置图image11的红线边界） ----
+const SITE={xMin:0,xMax:170,yMin:0,yMax:130,width:170,height:130};
+const SCALE_X=SITE.width/850, SCALE_Z=SITE.height/650;
+function pxToWorld(cx,cy){return{x:(cx-SITE.xMin)*SCALE_X,z:(cy-SITE.yMin)*SCALE_Z};}
+
+// ---- 全部构筑物数据（基于 PPTX image11 布局 + image10 清单表） ----
+const STRUCT_DATA=[
+  // ═════════════════════════ 进水端 / 厂区北部 ═════════════════════════
+  {
+    id:'h215',name:'H215 综合楼',phase:'二期',
+    type:'building',cx:28,cy:58,w:18,h:14,floorH:14,color:0xa0b0c0,
+    specs:{size:'18m×14m×4F(14m)',HRT:'-',vol:'-',role:'综合办公/中控室/宿舍'},
+    devices:[{name:'SCADA工作站',model:'研华IPC-610L',status:1},{name:'监控大屏',model:'55寸LED拼接屏×4',status:1},{name:'视频监控NVR',model:'海康DS-8616',status:1}]
+  },
+  {id:'h214',name:'H214 变配电间',phase:'二期',type:'building',cx:30,cy:95,w:16,h:12,floorH:6,color:0xb8c4ce,
+   specs:{size:'16m×12m×2F(6m)',HRT:'-',vol:'-',role:'10kV变配电'},
+   devices:[{name:'10kV进线柜',model:'KYN28-12',status:1},{name:'变压器',model:'SCB13-630kVA',status:1},{name:'低压配电柜',model:'MNS',status:1}]},
+  {id:'h211',name:'H211 预处理操作间',phase:'二期',type:'building',cx:70,cy:72,w:14,h:10,floorH:5,color:0xc8d0d8,
+   specs:{size:'14m×10m',HRT:'-',vol:'-',role:'预处理单元控制'},
+   devices:[{name:'PLC控制柜',model:'西门子S7-1200',status:1},{name:'在线仪表柜',model:'定制',status:1}]},
+  // 臭气处理间
+  {id:'h216',name:'H216 臭气处理间',phase:'二期',type:'building',cx:95,cy:48,w:10,h:8,floorH:5,color:0x8faab5,
+   specs:{size:'10m×8m',HRT:'-',vol:'-',role:'生物除臭'},
+   devices:[{name:'生物滤池',model:'Q=12000m³/h',status:1},{name:'离心风机',model:'CZ-100',status:1}]},
+  // 粗格栅+提升泵井
+  {id:'h201',name:'H201 粗格栅及提升泵房',phase:'二期',type:'process',cx:140,cy:56,w:24,h:18,tankD:8,floorH:-6,color:0x5a8fbf,
+   specs:{size:'24m×18m×8m',HRT:'~2min',vol:'3100m³',role:'粗格栅+进水泵房'},
+   devices:[
+     {name:'粗格栅机',model:'XG-1500 回转式,B=1500mm,b=8mm,N=1.5kW',status:1},
+     {name:'无轴螺旋输送压榨机',model:'WLS-260,L=5m',status:1},
+     {name:'进水泵',model:'潜水排污泵250WQ700-20-75×3台(2用1备)',status:1},
+     {name:'电动闸阀',model:'DN400',status:1}
+   ]},
+  // 提升泵井（与粗格栅合建）
+  {id:'h202',name:'H202 提升泵井',phase:'二期',type:'tank_rect',cx:168,cy:58,w:10,h:10,tankD:7,floorH:-5.5,color:0x6a9fd0,
+   specs:{size:'10m×10m×7m',HRT:'~5min',vol:'700m³',role:'提升泵井（改造）'},
+   devices:[]},
+
+  // ═════════════════════════ 预处理区 / 中上部 ═════════════════════════
+  // 细格栅+曝气沉砂池
+  {id:'h203',name:'H203 细格栅及曝气沉砂池',phase:'二期',type:'process',cx:220,cy:64,w:26,h:20,tankD:6,floorH:-5,color:0x4a85bf,
+   specs:{size:'26m×20m×6m',HRT:'~5min',vol:'2800m³',role:'细格栅+曝气沉砂'},
+   devices:[
+     {name:'细格栅机',model:'XG-800 回转式,B=800mm,b=3mm,N=1.1kW',status:1},
+     {name:'螺旋输送机',model:'LS-220,L=3m',status:1},
+     {name:'曝气沉砂池',model:'L×B×H=12×4×4.5m',status:1},
+     {name:'鼓风机',model:'罗茨鼓风机SSR-80',status:1},
+     {name:'吸砂泵',model:'ZWL50-20-30',status:1},
+     {name:'砂水分离器',model:'LSSF-260',status:1}
+   ]},
+  {id:'h204',name:'H204 曝气沉砂池',phase:'二期',type:'tank_rect',cx:225,cy:105,w:14,h:12,tankD:5,floorH:-4,color:0x5a90ca,
+   specs:{size:'14m×12m×5m',HRT:'~4min',vol:'680m³',role:'曝气沉砂池'},
+   devices:[]},
+
+  // 配水井
+  {id:'dist',name:'配水井',phase:'二期',type:'well',cx:125,cy:115,w:8,h:8,tankD:4,floorH:-3,color:0x7aa8d0,
+   specs:{size:'8m×8m×4m',HRT:'~3min',vol:'256m³',role:'均匀配水'},
+   devices:[]},
+
+  // ═════════════════════════ 核心生化区 / 中心 ═════════════════════════
+  // 初沉池（圆形）
+  {id:'h205',name:'H205 初沉池',phase:'二期',type:'tank_circular',cx:118,cy:148,r:14,tankD:4.5,floorH:-3.8,color:0x4889d9,
+   specs:{size:'Φ28m×4.5m×2座',HRT:'~2.5h',vol:'5500m³',role:'初沉沉淀'},
+   devices:[
+     {name:'中心传动刮泥机',model:'ZNZG-28,N=0.75kW',status:1},
+     {name:'排泥泵',model:'WQ15-10-1.5',status:1}
+   ]},
+
+  // 一体化生物池（A/O工艺，核心构筑物——图中最大黄色矩形）
+  {id:'h206',name:'H206 一体化生物池(A/O)',phase:'二期',type:'tank_rect',cx:155,cy:165,w:72,h:58,tankD:7,floorH:-6.2,color:0x2171d8,
+   specs:{
+     size:'72m×58m×7m',HRT:'~10h',vol:'29000m³',
+     role:'A/O生化脱氮除磷（厌氧+好氧+缺氧）',
+     params:{MLSS:3800,HRT_Anaerobic:'1.5h',HRT_Anoxic:'3h',HRT_Aerobic:'5.5h',DO_Anaerobic:'<0.2mg/L',DO_Anoxic:'0.3-0.5mg/L',DO_Aerobic:'2-4mg/L',SVI:'95mL/g',SV30:'36%',F_M:'0.08kgBOD/(kgMLVSS·d)',SRT:'12-15d',Temp:'12-28°C'}
+   },
+   devices:[
+     {name:'水下推进器',model:'QJB4/6-320/3-980×6台',status:1},
+     {name:'微孔曝气盘',model:'Φ215膜片式×1200套',status:1},
+     {name:'混合液回流泵',model:'QHB6-14-2.2×3台',status:1},
+     {name:'污泥回流泵',model:'WQ100-15-7.5×3台',status:1},
+     {name:'剩余污泥泵',model:'WQ50-10-3×2台',status:1},
+     {name:'DO仪',model:'HACH LDO II ×8套',status:1},
+     {name:'MLSS计',model:'HACH Sc ×4套',status:1}
+   ]},
+
+  // 高效沉淀池
+  {id:'h207',name:'H207 高效沉淀池',phase:'二期',type:'tank_rect',cx:240,cy:195,w:28,h:22,tankD:5.5,floorH:-4.5,color:0x3a82d4,
+   specs:{size:'28m×22m×5.5m',HRT:'~40min',vol:'3400m³',role:'混凝沉淀+斜管'},
+   params:{surfaceLoad:'12m³/m²·h','混凝区':'PAC+PAM','斜管倾角':'60°','排泥方式':'重力+吸泥车'},
+   devices:[
+     {name:'絮凝搅拌机',model:'变频调速,N=3kW×2',status:1},
+     {name:'斜管填料',model:'Φ50六角形PP,H=1m',status:1},
+     {name:'污泥回流泵',model:'WQ80-10-5.5',status:1},
+     {name:'加药计量泵',model:'米顿罗GM0050×2',status:1}
+   ]},
+
+  // V型滤池
+  {id:'h208',name:'H208 V型滤池',phase:'二期',type:'filter',cx:235,cy:235,w:22,h:18,tankD:4,floorH:-3.2,color:0x4a8ed8,
+   specs:{size:'22m×18m×4m',HRT:'~35min',vol:'3200m³',role:'均质石英砂深床过滤'},
+   params:{filtrationRate:'6-8m/h','滤料层':'石英砂H=1.2m d=0.9-1.2mm','反洗周期':'24-48h','反洗强度':'气冲14L/s·m² 水冲4L/s·m²'},
+   devices:[
+     {name:'反冲洗风机',model:'GRB-50',status:1},
+     {name:'反冲洗水泵',model:'ISG150-315A',status:1},
+     {name:'气动阀门组',model:'DN300/DN400×8套',status:1},
+     {name:'液位差计',model:'E+H FMM50',status:1}
+   ]},
+
+  // 鼓风机房及加药间（合建）
+  {id:'h212',name:'H212 鼓风机房及加药间',phase:'二期',type:'building',cx:68,cy:165,w:22,h:16,floorH:8,color:0xb0bec5,
+   specs:{size:'22m×16m×2F(8m)',HRT:'-',vol:'-',role:'空气供给+化学药剂投加'},
+   devices:[
+     {name:'空气悬浮离心鼓风机',model:'TURBO-TB150,Q=75m³/min,P=65kPa,N=132kW×3(2用1备)',status:1},
+     {name:'复合碳源储罐',model:'V=10m³,PE材质',status:1},
+     {name:'碳源加药泵',model:'米顿罗GM0010×2',status:1},
+     {name:'PAC制备/投加装置',model:'PAC-500L/H',status:1},
+     {name:'PAM制备装置',model:'PAM-2000L/H',status:1},
+     {name:'次氯酸钠投加装置',model:'NaClO-500L/H',status:1}
+   ]},
+
+  // ═════════════════════════ 污泥处理区 / 下部左侧 ═════════════════════════
+  {id:'h210',name:'H210 污泥浓缩池',phase:'二期',type:'tank_circular',cx:38,cy:215,r:12,tankD:4.5,floorH:-3.8,color:0x5090d8,
+   specs:{size:'Φ24m×4.5m×1座',HRT:'~18h',vol:'4000m³',role:'重力污泥浓缩'},
+   params:{SL:'0.5-1%',underflowSL:'3-4%',SRT_thickener:'24-48h'},
+   devices:[
+     {name:'中心传动浓缩机',model:'ZXN-24',status:1},
+     {name:'栅条式污泥浓缩机',model:'GNZ-24',status:1},
+     {name:'污泥切割机',model:'CS-100',status:1}
+   ]},
+
+  {id:'h213',name:'H213 脱水机房',phase:'二期',type:'building',cx:38,cy:270,w:28,h:20,floorH:8,color:0xc0392b,
+   specs:{size:'28m×20m×2F(8m)',HRT:'-',vol:'-',role:'污泥脱水干化'},
+   devices:[
+     {name:'隔膜板框压滤机',model:'XMZ800/2000-U,A=800m²,N=7.5kW×2',status:1},
+     {name:'进料泵',model:'螺杆泵G35-2×2',status:1},
+     {name:'高压隔膜泵',model:'DP-25×2',status:1},
+     {name:'皮带输送机',model:'DS-500,L=8m',status:1},
+     {name:'PAM加药装置',model:'PAM-1500L/H',status:1},
+     {name:'阳离子PAM投加装置',model:'CPAM-500L/H',status:1}
+   ]},
+
+  // ═════════════════════════ 深度处理区 / 下部右侧 ═════════════════════════
+  // MBR 膜池（两格 H106A/B 对应）
+  {id:'mbr_a',name:'MBR膜池 A列',phase:'二期',type:'tank_rect',cx:155,cy:245,w:32,h:46,tankD:5.5,floorH:-4.8,color:0x2878d0,
+   specs:{size:'32m×46m×5.5m',HRT:'~3.5h',vol:'8100m³',role:'MBR膜过滤(A列)'},
+   params:{membraneType:'PVDF中空纤维FS-LF-60',flux:'15-20LMH',TMP:'<0.05MPa',MLSS_membrane:'8000-12000mg/L'},
+   devices:[
+     {name:'MBR膜组件',model:'FS-LF-60,产水量=1200m³/d×8组',status:1},
+     {name:'产水泵',model:'QWB150-15-7.5×4(3用1备)',status:1},
+     {name:'反冲洗泵',model:'ISG80-160(I)A',status:1},
+     {name:'真空系统',model:'水环式真空泵SZB-4',status:1},
+     {name:'膜吹扫鼓风机',model:'GRB-30×2',status:1}
+   ]},
+  {id:'mbr_b',name:'MBR膜池 B列',phase:'二期',type:'tank_rect',cx:198,cy:245,w:32,h:46,tankD:5.5,floorH:-4.8,color:0x2878d0,
+   specs:{size:'32m×46m×5.5m',HRT:'~3.5h',vol:'8100m³',role:'MBR膜过滤(B列)'},
+   params:{membraneType:'PVDF中空纤维FS-LF-60',flux:'15-20LMH',TMP:'<0.05MPa',MLSS_membrane:'8000-12000mg/L'},
+   devices:[
+     {name:'MBR膜组件',model:'FS-LF-60,产水量=1200m³/d×8组',status:1},
+     {name:'产水泵',model:'QWB150-15-7.5×4(3用1备)',status:1}
+   ]},
+
+  // 接触消毒池（圆形，右下角）
+  {id:'h209',name:'H209 接触消毒池及巴氏计量槽',phase:'二期',type:'tank_circular',cx:275,cy:275,r:14,tankD:4.5,floorH:-3.8,color:0x3880dc,
+   specs:{size:'Φ28m×4.5m',HRT:'~30min',vol:'5500m³',role:'接触消毒+出水计量'},
+   params:{contactTime:'30min','disinfectant':'次氯酸钠(10%有效氯)','dose':'3-5mg/L','parshallFlume':'巴氏槽 Qmax=1800m³/h'},
+   devices:[
+     {name:'巴氏计量槽',model:'Parshall Q=50-1800m³/h',status:1},
+     {name:'超声波流量计',model:'E+H Prosonic Flow G500',status:1},
+     {name:'COD/氨氮在线仪',model:'HACH BioTector/AMTAX',status:1}
+   ]},
+
+  // 出水计量井
+  {id:'h221',name:'H221 出水计量井',phase:'二期',type:'well',cx:295,cy:295,w:6,h:6,tankD:3,floorH:-2.5,color:0x6aace0,
+   specs:{size:'6m×6m×3m',HRT:'-',vol:'108m³',role:'最终出水监测/排放'},
+   devices:[
+     {name:'总磷在线分析仪',model:'HACH Phosphax Sigma',status:1},
+     {name:'SS在线分析仪',model:'HACH Solitax',status:1}
+   ]},
+
+  // ═════════════════════════ 辅助建筑 ═════════════════════════
+  {id:'h217_warehouse',name:'H217 库房维修间',phase:'二期',type:'building',cx:265,cy:175,w:18,h:12,floorH:5,color:0xa89070,
+   specs:{size:'18m×12m×1F(5m)',HRT:'-',vol:'-',role:'备品库/维修车间'},
+   devices:[{name:'行车吊',model:'LD5t-12m',status:1}]},
+];
+
+// ---- 工艺流向顺序 ----
+const flowOrder=['h215','h214','h216','h201','h202','h203','h204','dist','h205','h206','h207','h208','mbr_a','mbr_b','h212','h210','h213','h209','h221','h217_warehouse'];
+
+// ---- 进出水设计值 ----
+const designData={
+  influent:{CODcr:380,BOD5:160,SS:280,NH3_N:35,TN:50,TP:6,pH:'6.5-8.5'},
+  effluent:{CODcr:50,BOD5:10,SS:10,NH3_N:5,TN:15,TP:0.5,pH:'6-9'},
+  dailyVol:26800,loadRate:89,
+  powerKwhPerTon:0.32,
+  sludgeProd_t_d:15,
+};
+
+// ---- 情景模式预设 ----
+const scenarioPresets={
+  normal:{label:'🟢 正常运行',influent:{...designData.influent},effluent:{...designData.effluent},vol:26800,power:8576,sludge:15},
+  rain:{label:'🌧 雨季冲击',influent:{CODcr:280,BOD5:100,SS:450,NH3_N:25,TN:38,TP:4.5},effluent:{CODcr:55,BOD5:12,SS:15,NH3_N:6,TN:17,TP:0.6},vol:42000,power:9500,sludge:18},
+  shock:{label:'⚠️ 进水冲击',influent:{CODcr:520,BOD5:220,SS:350,NH3_N:48,TN:68,TP:8.5},effluent:{CODcr:65,BOD5:15,SS:14,NH3_N:7.5,TN:20,TP:0.7},vol:26800,power:9200,sludge:20},
+  cold:{label:'❄️ 低温工况',influent:{CODcr:360,BOD5:145,SS:260,NH3_N:38,TN:48,TP:5.5},effluent:{CODcr:55,BOD5:11,SS:12,NH3_N:7,TN:18,TP:0.55},vol:23000,power:9100,sludge:14},
+  maintain:{label:'🔧 设备检修',influent:{...designData.influent},effluent:{CODcr:58,BOD5:13,SS:13,NH3_N:6.5,TN:18,TP:0.65},vol:19000,power:7200,sludge:12},
+  saving:{label:'💡 节能降耗',influent:{...designData.influent},effluent:{CODcr:48,BOD5:9,SS:9,NH3_N:4.5,TN:14,TP:0.45},vol:26800,power:7200,sludge:14},
+};
+
+let activeScenario='normal';
+let structures=[];
+let camera,scene,renderer,controls;
+let raycaster,mouse,infoEl;
+
+// ============================================================
+//  运行调控面板配置与逻辑
+// ============================================================
+const ctlConfig=[
+  {group:'进水指标',fields:[
+    {key:'in_COD',label:'CODcr (mg/L)',min:100,max:800,val:380,step:5},
+    {key:'in_BOD',label:'BOD₅ (mg/L)',min:30,max:400,val:160,step:2},
+    {key:'in_SS',label:'SS (mg/L)',min:50,max:600,val:280,step:5},
+    {key:'in_NH3',label:'NH₃-N (mg/L)',min:5,max:80,val:35,step:0.5},
+    {key:'in_TN',label:'TN (mg/L)',min:15,max:100,val:50,step:1},
+    {key:'in_TP',label:'TP (mg/L)',min:0.5,max:15,val:6,step:0.1},
+  ]},
+  {group:'出水指标',fields:[
+    {key:'out_COD',label:'CODcr (mg/L)',min:20,max:120,val:50,step:1},
+    {key:'out_BOD',label:'BOD₅ (mg/L)',min:3,max:30,val:10,step:0.5},
+    {key:'out_SS',label:'SS (mg/L)',min:3,max:30,val:10,step:0.5},
+    {key:'out_NH3',label:'NH₃-N (mg/L)',min:0.5,max:15,val:5,step:0.25},
+    {key:'out_TN',label:'TN (mg/L)',min:5,max:35,val:15,step:0.5},
+    {key:'out_TP',label:'TP (mg/L)',min:0.1,max:2,val:0.5,step:0.05},
+  ]},
+  {group:'水量与电量',fields:[
+    {key:'water_vol',label:'日处理水量 (吨/d)',min:5000,max:50000,val:26800,step:100},
+    {key:'power_kwh',label:'日用电量 (kWh/d)',min:2000,max:20000,val:8576,step:10},
+  ]},
+  {group:'药剂投加量',fields:[
+    {key:'chem_carbon',label:'复合碳源 (mg/L)',min:0,max:100,val:30,step:0.5},
+    {key:'chem_pam_a',label:'阴离子PAM (mg/L)',min:0,max:5,val:0.8,step:0.05},
+    {key:'chem_pac',label:'聚合氯化铝PAC (mg/L)',min:0,max:20,val:5,step:0.1},
+    {key:'chem_naclo',label:'次氯酸钠 (mg/L)',min:0,max:10,val:3,step:0.1},
+    {key:'chem_cpam',label:'阳离子PAM (kg/tDS)',min:0,max:10,val:3,step:0.1},
+  ]},
+  {group:'污泥',fields:[
+    {key:'sludge_wet',label:'湿泥产量 (t/d)',min:1,max:50,val:15,step:0.5},
+    {key:'sludge_moisture',label:'含水率 (%)',min:70,max:99,val:80,step:0.5},
+  ]},
+];
+const CARBON_CONC=600000; // 复合碳源商品液浓度 mg/L
+
+function buildControls(){
+  const c=document.getElementById('colInputs');
+  let html='';
+  for(const g of ctlConfig){
+    html+=`<h3>${g.group}</h3>`;
+    for(const f of g.fields){
+      html+=`<div class="m-field"><label>${f.label}</label><div style="display:flex;align-items:center;gap:6px">`;
+      html+=`<input type="range" min="${f.min}" max="${f.max}" step="${f.step}" value="${f.val}" data-key="${f.key}" oninput="onCtlInput(this)">`;
+      html+=`<span class="m-val" id="v_${f.key}">${f.val}</span>`;
+      html+=`</div></div>`;
+    }
+  }
+  c.innerHTML=html;
+  computeAndShow();
+}
+function onCtlInput(el){document.getElementById('v_'+el.dataset.key).textContent=el.value;computeAndShow();}
+function getVal(k){
+  const el=document.querySelector(`[data-key="${k}"]`);
+  return el?parseFloat(el.value):0;
+}
+function computeAndShow(){
+  const inCod=getVal('in_COD'),inBod=getVal('in_BOD'),inSS=getVal('in_SS'),
+        inNh3=getVal('in_NH3'),inTN=getVal('in_TN'),inTP=getVal('in_TP');
+  const outCod=getVal('out_COD'),outBod=getVal('out_BOD'),outSS=getVal('out_SS'),
+        outNh3=getVal('out_NH3'),outTN=getVal('out_TN'),outTP=getVal('out_TP');
+  const vol=getVal('water_vol'),power=getVal('power_kwh');
+  const carbonMg=getVal('chem_carbon'),pamA=getVal('chem_pam_a'),
+        pac=getVal('chem_pac'),naclo=getVal('chem_naclo'),cpamKgTds=getVal('chem_cpam');
+  const wetSludge=getVal('sludge_wet'),moisture=getVal('sludge_moisture');
+
+  // 去除率
+  const rCod=removal(inCod,outCod),rBod=removal(inBod,outBod),rSS=removal(inSS,outSS),
+        rNh3=removal(inNh3,outNh3),rTN=removal(inTN,outTN),rTP=removal(inTP,outTP);
+  function removal(a,b){if(b>=a)return'—';return((1-b/a)*100).toFixed(1)+'%';}
+  function rc(v){return v==='—'?'':parseFloat(v);}
+
+  // 吨水电耗
+  const kwhPerTon=(power/vol).toFixed(3);
+
+  // 吨水药耗
+  const tCarbon_kg=(carbonMg/1000).toFixed(4);
+  const tCarbon_L=((carbonMg/CARBON_CONC)*1000).toFixed(4);
+  const tPamA=(pamA/1000).toFixed(4);
+  const tPac=(pac/1000).toFixed(4);
+  const tNaclO=(naclo/1000).toFixed(4);
+
+  // 污泥核算
+  const drySludge=wetSludge*(1-moisture/100);
+  const cpamDaily=drySludge*cpamKgTds;
+  const cpamPerTds=(cpamDaily/drySludge).toFixed(1);
+
+  document.getElementById('colResults').innerHTML=
+    `<div class="result-card"><div class="rc-title">① 去除率</div>`+
+    `<div class="rm-row"><span>CODcr</span><span class="${rc(rCod)>=90?'rm-ok':rc(rCod)>=75?'rm-warn':'rm-bad'}">${inCod}→${outCod} ${rCod}</span></div>`+
+    `<div class="rm-row"><span>BOD₅</span><span class="${rc(rBod)>=90?'rm-ok':rc(rBod)>=75?'rm-warn':'rm-bad'}">${inBod}→${outBod} ${rBod}</span></div>`+
+    `<div class="rm-row"><span>SS</span><span class="${rc(rSS)>=90?'rm-ok':rc(rSS)>=75?'rm-warn':'rm-bad'}">${inSS}→${outSS} ${rSS}</span></div>`+
+    `<div class="rm-row"><span>NH₃-N</span><span class="${rc(rNh3)>=90?'rm-ok':rc(rNh3)>=75?'rm-warn':'rm-bad'}">${inNh3}→${outNh3} ${rNh3}</span></div>`+
+    `<div class="rm-row"><span>TN</span><span class="${rc(rTN)>=85?'rm-ok':rc(rTN)>=70?'rm-warn':'rm-bad'}">${inTN}→${outTN} ${rTN}</span></div>`+
+    `<div class="rm-row"><span>TP</span><span class="${rc(rTP)>=90?'rm-ok':rc(rTP)>=80?'rm-warn':'rm-bad'}">${inTP}→${outTP} ${rTP}</span></div>`+
+    `</div>`+
+
+    `<div class="result-card"><div class="rc-title">② 吨水电耗</div>`+
+    `<div class="rm-row"><span>日处理量</span><span class="rm-ok">${vol.toLocaleString()} m³/d</span></div>`+
+    `<div class="rm-row"><span>日用电量</span><span>${power.toLocaleString()} kWh/d</span></div>`+
+    `<div class="rm-row"><span><b>吨水电耗</b></span><span class="rm-ok"><b>${kwhPerTon}</b> 度/吨</span></div>`+
+    `</div>`+
+
+    `<div class="result-card"><div class="rc-title">③ 吨水药耗</div>`+
+    `<div class="rm-row"><span>复合碳源</span><span>${carbonMg} mg/L → ${tCarbon_kg} kg/吨<br><small>(商品液 ${CARBON_CONC/10000}万mg/L → ${tCarbon_L} L/吨)</small></span></div>`+
+    `<div class="rm-row"><span>阴离子PAM</span><span>${pamA} mg/L → ${tPamA} kg/吨</span></div>`+
+    `<div class="rm-row"><span>PAC</span><span>${pac} mg/L → ${tPac} kg/吨</span></div>`+
+    `<div class="rm-row"><span>次氯酸钠</span><span>${naclo} mg/L → ${tNaclO} kg/吨</span></div>`+
+    `<div class="rm-row"><span>阳离子PAM</span><span>${cpamKgTds} kg/tDS → 日用量 ${cpamDaily.toFixed(1)} kg/d</span></div>`+
+    `</div>`+
+
+    `<div class="result-card"><div class="rc-title">④ 污泥核算</div>`+
+    `<div class="rm-row"><span>湿泥产量</span><span>${wetSludge} t/d</span></div>`+
+    `<div class="rm-row"><span>含水率</span><span>${moisture}%</span></div>`+
+    `<div class="rm-row"><span>干泥量</span><span class="rm-ok"><b>${drySludge.toFixed(2)}</b> tDS/d</span></div>`+
+    `<div class="rm-row"><span>吨干泥阳离子</span><span class="rm-ok"><b>${cpamPerTds}</b> kg/tDS</span></div>`+
+    `</div>`;
+
+  // 同步到底部仪表盘
+  if(typeof updateDashFromPanel==='function')updateDashFromPanel({inCod,inBod,inSS,inNh3,inTN,inTP,outCod,outBod,outSS,outNh3,outTN,outTP,vol,kwhPerTon,wetSludge});
+}
+function toggleControlPanel(){document.getElementById('ctlModal').classList.toggle('open');}
+
+// ============================================================
+//  3D 场景构建
+// ============================================================
+function init3D(){
+  const canvas=document.getElementById('three-canvas');
+  const rect=canvas.parentElement.getBoundingClientRect();
+  scene=new THREE.Scene();
+  scene.background=new THREE.Color(0x0d1117);
+
+  camera=new THREE.PerspectiveCamera(50,rect.width/rect.height,0.1,1000);
+  camera.position.set(85,100,130);
+  camera.lookAt(85,0,65);
+
+  renderer=new THREE.WebGLRenderer({canvas,antialias:true,alpha:true,preserveDrawingBuffer:false});
+  renderer.setSize(rect.width,rect.height);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+
+  controls=new THREE.OrbitControls(camera,renderer.domElement);
+  controls.target.set(85,0,65);
+  controls.enableDamping=true;
+  controls.dampingFactor=0.08;
+  controls.maxPolarAngle=Math.PI/2.1;
+  controls.minDistance=20;
+  controls.maxDistance=280;
+
+  // 光照
+  scene.add(new THREE.AmbientLight(0xffffff,0.55));
+  const dirLight=new THREE.DirectionalLight(0xffffff,0.65);
+  dirLight.position.set(60,120,80);
+  dirLight.castShadow=true;
+  scene.add(dirLight);
+  const fillLight=new THREE.DirectionalLight(0xcce8ff,0.25);
+  fillLight.position.set(-40,60,-30);
+  scene.add(fillLight);
+  scene.add(new THREE.HemisphereLight(0x87ceeb,0x36622b,0.3));
+
+  buildScene();
+
+  raycaster=new THREE.Raycaster();
+  mouse=new THREE.Vector2();
+  infoEl=document.getElementById('infoOverlay');
+
+  canvas.addEventListener('click',onClickCanvas);
+  window.addEventListener('resize',onResize);
+  animate();
+}
+
+function buildScene(){
+  // 地面
+  const groundGeo=new THREE.PlaneGeometry(SITE.width+30,SITE.height+30);
+  const groundMat=new THREE.MeshStandardMaterial({color:0x2d5a27,roughness:0.9});
+  const ground=new THREE.Mesh(groundGeo,groundMat);
+  ground.rotation.x=-Math.PI/2;
+  ground.position.set(SITE.width/2,-0.1,SITE.height/2);
+  scene.add(ground);
+
+  // 道路网格
+  const roadMat=new THREE.MeshStandardMaterial({color:0x555555,roughness:0.95});
+  const mainRoadH=new THREE.BoxGeometry(SITE.width+20,4,0.1);
+  const mrH=new THREE.Mesh(mainRoadH,roadMat);mrH.position.set(SITE.width/2,0,0);scene.add(mrH);
+  const mainRoadV=new THREE.BoxGeometry(4,SITE.height+20,0.1);
+  const mrV=new THREE.Mesh(mainRoadV,roadMat);mrV.position.set(0,0,SITE.height/2);scene.add(mrV);
+  const sideRoadH=new THREE.BoxGeometry(SITE.width+20,3,0.1);
+  const srH=new THREE.Mesh(sideRoadH,roadMat);srH.position.set(SITE.width/2,0,SITE.height);scene.add(srH);
+
+  // 厂界红线
+  const boundaryPts=[new THREE.Vector3(0,0.3,0),new THREE.Vector3(SITE.width,0.3,0),
+    new THREE.Vector3(SITE.width,0.3,SITE.height),new THREE.Vector3(0,0.3,SITE.height),new THREE.Vector3(0,0.3,0)];
+  const boundaryGeo=new THREE.BufferGeometry().setFromPoints(boundaryPts);
+  scene.add(new THREE.Line(boundaryGeo,new THREE.LineBasicMaterial({color:0xe94560,linewidth:2})));
+
+  // 构筑物
+  for(let i=0;i<STRUCT_DATA.length;i++){
+    try{
+      const sd=STRUCT_DATA[i];
+      const group=new THREE.Group();
+      group.userData={id:sd.id,name:sd.name,index:i,sd:sd};
+      createStructureModel(group,sd);
+      createLabel(sd.name,group.position.clone(),sd.type);
+      group.position.copy(pxToWorld(sd.cx,sd.cy)); // 确保位置在创建后设置
+      scene.add(group);
+      structures.push(group);
+    }catch(e){console.error('Structure build error ['+STRUCT_DATA[i].id+']:',e.message);}
+  }
+
+  // 绿化树木
+  addTrees();
+}
+
+function createStructureModel(group,sd){
+  const wp=pxToWorld(sd.cx,sd.cy);
+  const pos=new THREE.Vector3(wp.x,0,wp.z);
+
+  if(sd.type==='tank_rect'){
+    createRectTank(group,sd.w,sd.tankD||6,sd.color,pos);
+  }else if(sd.type==='tank_circular'){
+    createCircularTank((sd.r||10)*2,sd.tankD||5,sd.color,pos);
+  }else if(sd.type==='building'){
+    createBuilding(group,sd.w,sd.h,sd.floorH||8,sd.color,pos);
+  }else if(sd.type==='filter'){
+    createFilterTank(group,sd.w,sd.h,sd.tankD||4,sd.color,pos);
+  }else if(sd.type==='process'){
+    createProcessUnit(group,sd.w,sd.h,sd.tankD||6,sd.color,pos);
+  }else if(sd.type==='well'){
+    createWell(group,sd.w,sd.h,sd.tankD||3,sd.color,pos);
+  }else{
+    createRectTank(group,sd.w,sd.tankD||5,sd.color,pos);
+  }
+  group.position.copy(pos);
+}
+
+// --- 几何体创建函数 ---
+function createRectTank(group,w,d,col,pos){
+  const h=d||6;
+  // 池体
+  const geo=new THREE.BoxGeometry(w,h,d);
+  const mat=new THREE.MeshStandardMaterial({color:col,transparent:true,opacity:0.78,roughness:0.3,metalness:0.1});
+  const mesh=new THREE.Mesh(geo,mat);
+  mesh.position.y=h/2-0.5;
+  mesh.castShadow=true;mesh.receiveShadow=true;
+  group.add(mesh);
+  // 边框
+  const edges=new THREE.EdgesGeometry(geo);
+  group.add(new THREE.LineSegments(edges,new THREE.LineBasicMaterial({color:0x88ccff,linewidth:1})));
+  // 水面
+  if(h>2){
+    const waterGeo=new THREE.PlaneGeometry(w*0.92,d*0.92);
+    const waterMat=new THREE.MeshStandardMaterial({color:0x1e90ff,transparent:true,opacity:0.45,roughness:0.1,metalness:0.3});
+    const water=new THREE.Mesh(waterGeo,waterMat);
+    water.rotation.x=-Math.PI/2;
+    water.position.y=h-0.3;
+    group.add(water);
+  }
+}
+function createCircularTank(dia,d,col,pos){
+  const r=dia/2,h=d||5;
+  const geo=new THREE.CylinderGeometry(r,r,h,32);
+  const mat=new THREE.MeshStandardMaterial({color:col,transparent:true,opacity:0.78,roughness:0.3});
+  const mesh=new THREE.Mesh(geo,mat);
+  mesh.position.y=h/2-0.5;mesh.castShadow=true;
+  group.add(mesh);
+  const edges=new THREE.EdgesGeometry(geo);
+  group.add(new THREE.LineSegments(edges,new THREE.LineBasicMaterial({color:0x88ccff})));
+  if(h>2){
+    const wGeo=new THREE.CircleGeometry(r*0.9,32);
+    const wMat=new THREE.MeshStandardMaterial({color:0x1e90ff,transparent:true,opacity:0.45,side:THREE.DoubleSide});
+    const water=new THREE.Mesh(wGeo,wMat);water.rotation.x=-Math.PI/2;water.position.y=h-0.3;group.add(water);
+  }
+}
+function createBuilding(group,w,fh,col,pos){
+  // 主体
+  const bGeo=new THREE.BoxGeometry(w,fh,w*0.75);
+  const bMat=new THREE.MeshStandardMaterial({color:col,roughness:0.7,metalness:0.05});
+  const bMesh=new THREE.Mesh(bGeo,bMat);bMesh.position.y=fh/2;bMesh.castShadow=true;bMesh.receiveShadow=true;
+  group.add(bMesh);
+  const edges=new THREE.EdgesGeometry(bGeo);
+  group.add(new THREE.LineSegments(edges,new THREE.LineBasicMaterial({color:0x666})));
+  // 屋顶
+  const roofGeo=new THREE.BoxGeometry(w+1,0.5,w*0.75+1);
+  const roofMat=new THREE.MeshStandardMaterial({color:0x8b4513,roughness:0.8});
+  const roof=new THREE.Mesh(roofGeo,roofMat);roof.position.y=fh+0.25;
+  group.add(roof);
+  // 窗户装饰
+  const winSize=Math.min(fh*0.15,1.2);
+  for(let floor=1;floor<=Math.floor(fh/3.5);floor++){
+    const wy=floor*3.5-winSize/2;
+    [-1,1].forEach(side=>{
+      const wGeo=new THREE.PlaneGeometry(w*0.25,winSize);
+      const wMat=new THREE.MeshBasicMaterial({color:0x87ceeb,transparent:true,opacity:0.5,side:THREE.DoubleSide});
+      const win=new THREE.Mesh(wGeo,wMat);
+      win.position.set(side*(w*0.38),wy,w*0.76/2+0.01);
+      group.add(win);
+    });
+  }
+}
+function createFilterTank(group,w,d,tankD,col,pos){
+  const h=tankD||4;
+  const geo=new THREE.BoxGeometry(w,h,d);
+  const mat=new THREE.MeshStandardMaterial({color:col,transparent:true,opacity:0.75,roughness:0.3});
+  const mesh=new THREE.Mesh(geo,mat);mesh.position.y=h/2-0.5;mesh.castShadow=true;
+  group.add(mesh);
+  const edges=new THREE.EdgesGeometry(geo);
+  group.add(new THREE.LineSegments(edges,new THREE.LineBasicMaterial({color:0xaaddff})));
+  // V型滤板示意
+  const vCount=Math.floor(d/4);
+  for(let i=0;i<vCount;i++){
+    const vGeo=new THREE.ConeGeometry(0.4,h*0.7,4);
+    const vMat=new THREE.MeshStandardMaterial({color:0xcccccc});
+    const vMesh=new THREE.Mesh(vGeo,vMat);
+    vMesh.position.set(-w*0.35+i*(w*0.7/vCount),h*0.35-h/2+0.5,-d*0.35);
+    group.add(vMesh);
+  }
+}
+function createProcessUnit(group,w,d,tankD,col,pos){
+  const h=tankD||6;
+  const geo=new THREE.BoxGeometry(w,h,d);
+  const mat=new THREE.MeshStandardMaterial({color:col,transparent:true,opacity:0.72,roughness:0.35});
+  const mesh=new THREE.Mesh(geo,mat);mesh.position.y=h/2-0.5;mesh.castShadow=true;mesh.receiveShadow=true;
+  group.add(mesh);
+  const edges=new THREE.EdgesGeometry(geo);
+  group.add(new THREE.LineSegments(edges,new THREE.LineBasicMaterial({color:0x88bbdd})));
+  // 格栅/设备示意
+  const railGeo=new THREE.BoxGeometry(Math.max(w*0.1,0.8),h*0.6,0.3);
+  const railMat=new THREE.MeshStandardMaterial({color:0x999999,metalness:0.6});
+  const rail=new THREE.Mesh(railGeo,railMat);rail.position.set(0,h*0.3-d*0.35,0);group.add(rail);
+}
+function createWell(group,w,d,tankD,col,pos){
+  const h=tankD||3;
+  const geo=new THREE.BoxGeometry(w,h,d);
+  const mat=new THREE.MeshStandardMaterial({color:col,transparent:true,opacity:0.7,roughness:0.4});
+  const mesh=new THREE.Mesh(geo,mat);mesh.position.y=h/2-0.5;group.add(mesh);
+  const edges=new THREE.EdgesGeometry(geo);
+  group.add(new THREE.LineSegments(edges,new THREE.LineBasicMaterial({color:0x77aacc})));
+}
+
+function createLabel(text,pos,type){
+  const canvas=document.createElement('canvas');
+  const ctx=canvas.getContext('2d');canvas.width=256;canvas.height=64;
+  ctx.fillStyle='rgba(0,0,0,0.7)';
+  // rounded rect (compatible with older Canvas 2D)
+  var r=8;
+  ctx.beginPath();
+  ctx.moveTo(r,0);ctx.lineTo(256-r,0);ctx.quadraticCurveTo(256,0,256,r);
+  ctx.lineTo(256,64-r);ctx.quadraticCurveTo(256,64,256-r,64);
+  ctx.lineTo(r,64);ctx.quadraticCurveTo(0,64,0,64-r);
+  ctx.lineTo(0,r);ctx.quadraticCurveTo(0,0,r,0);ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle='#ffffff';ctx.font='bold 22px Microsoft YaHei';ctx.textAlign='center';ctx.fillText(text,128,40);
+  const tex=new THREE.CanvasTexture(canvas);
+  const sprMat=new THREE.SpriteMaterial({map:tex,depthTest:false});
+  const spr=new THREE.Sprite(sprMat);spr.scale.set(12,3,1);
+  spr.position.set(pos.x,(type==='building'?10:7),pos.z+3);
+  scene.add(spr);
+}
+
+function addTrees(){
+  const treePos=[[5,5],[160,8],[8,120],[155,125],[270,10],[275,130],[130,-8],[-5,65]];
+  treePos.forEach(p=>{
+    const tg=new THREE.Group();
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.5,2.5,8),new THREE.MeshStandardMaterial({color:0x8b4513}));
+    trunk.position.y=1.25;tg.add(trunk);
+    const crown=new THREE.Mesh(new THREE.SphereGeometry(1.8,8,8),new THREE.MeshStandardMaterial({color:0x228b22}));
+    crown.position.y=3.5;tg.add(crown);
+    tg.position.set(p[0],0,p[1]);tg.scale.setScalar(0.8);
+    scene.add(tg);
+  });
+}
+
+// ---- 动画循环 ----
+function animate(){
+  requestAnimationFrame(animate);
+  try{controls.update();}catch(e){}
+  renderer.render(scene,camera);
+}
+
+function onResize(){
+  const rect=document.getElementById('three-canvas').parentElement.getBoundingClientRect();
+  camera.aspect=rect.width/rect.height;camera.updateProjectionMatrix();
+  renderer.setSize(rect.width,rect.height);
+}
+
+// ---- 点击检测 ----
+function onClickCanvas(e){
+  const rect=e.target.getBoundingClientRect();
+  mouse.x=((e.clientX-rect.left)/rect.width)*2-1;
+  mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
+  raycaster.setFromCamera(mouse,camera);
+  const hits=raycaster.intersectObjects(structures,true);
+  if(hits.length>0){
+    let obj=hits[0].object;
+    while(obj.parent&&!obj.userData.id)obj=obj.parent;
+    if(obj.userData&&obj.userData.sd){
+      showDetail(obj.userData.sd);
+      highlightNav(obj.userData.id);
+    }
+  }
+}
+
+// ---- 导航构建 ----
+function buildNav(){
+  const p=document.getElementById('navPanel');
+  let html='';
+  for(const fid of flowOrder){
+    const sd=STRUCT_DATA.find(s=>s.id===fid);
+    if(!sd)continue;
+    const phaseTag=`<span class="nc-phase">${sd.phase}</span>`;
+    const specsHtml=[];
+    if(sd.specs.size)specsHtml.push(`<span class="nc-item">规格:${sd.specs.size}</span>`);
+    if(sd.specs.HRT&&sd.specs.HRT!=='-')specsHtml.push(`<span class="nc-item">HRT:${sd.specs.HRT}</span>`);
+    if(sd.specs.vol&&sd.specs.vol!=='-')specsHtml.push(`<span class="nc-item">容积:${sd.specs.vol}</span>`);
+    html+=`<div class="nc-card" data-id="${sd.id}" onclick="selectNav('${sd.id}')">
+      <div class="nc-name">${sd.name}</div>${phaseTag}${specsHtml.join('')}
+    </div>`;
+  }
+  p.innerHTML=html;
+}
+
+function selectNav(id){
+  const sd=STRUCT_DATA.find(s=>s.id===id);
+  if(!sd)return;
+  showDetail(sd);
+  highlightNav(id);
+  // 相机聚焦
+  const wp=pxToWorld(sd.cx,sd.cy);
+  const targetPos=new THREE.Vector3(wp.x,0,wp.z);
+  // 简单的相机移动
+  const offset=new THREE.Vector3(30,25,30);
+  camera.position.copy(targetPos).add(offset);
+  controls.target.copy(targetPos);
+}
+
+function showDetail(sd){
+  document.getElementById('dpTitle').textContent=sd.name+' ('+sd.phase+')';
+  let html=`<table class="dp-table"><tbody>`;
+  html+=`<tr><td>构筑物编号</td><td><strong>${sd.id}</strong></td></tr>`;
+  html+=`<tr><td>功能角色</td><td>${sd.specs.role||'—'}</td></tr>`;
+  html+=`<tr><td>尺寸规格</td><td>${sd.specs.size||'—'}</td></tr>`;
+  if(sd.specs.HRT&&sd.specs.HRT!=='-')html+=`<tr><td>水力停留时间</td><td><strong>${sd.specs.HRT}</strong></td></tr>`;
+  if(sd.specs.vol&&sd.specs.vol!=='-')html+=`<tr><td>有效容积</td><td>${sd.specs.vol} m³</td></tr>`;
+  if(sd.params){
+    for(const[k,v]of Object.entries(sd.params))html+=`<tr><td>${k}</td><td><strong>${v}</strong></td></tr>`;
+  }
+  html+=`</tbody></table>`;
+
+  if(sd.devices&&sd.devices.length>0){
+    html+='<h4 style="font-size:11px;color:#4ecca3;margin:10px 0 6px">设备清单 ('+sd.devices.length+' 台)</h4>';
+    html+='<ul class="dp-dev-list">';
+    sd.devices.forEach(d=>{
+      const sc=d.status===1?'dev-on':d.status===0?'dev-off':'dev-warn';
+      html+=`<li><span>${d.name}<br><small style="color:#888">${d.model}</small></span><span class="dev-status ${sc}"></span></li>`;
+    });
+    html+='</ul>';
+  }
+  document.getElementById('dpBody').innerHTML=html;
+}
+
+function highlightNav(id){
+  document.querySelectorAll('.nc-card').forEach(c=>{
+    c.classList.toggle('active',c.dataset.id===id);
+  });
+}
+
+// ---- 仪表盘 ----
+function buildDashboard(){
+  const indicators=[
+    {key:'CODcr',unit:'mg/L',inKey:'in_COD',outKey:'out_COD',color:'#e74c3c'},
+    {key:'BOD₅',unit:'mg/L',inKey:'in_BOD',outKey:'out_BOD',color:'#3498db'},
+    {key:'SS',unit:'mg/L',inKey:'in_SS',outKey:'out_SS',color:'#2ecc71'},
+    {key:'NH₃-N',unit:'mg/L',inKey:'in_NH3',outKey:'out_NH3',color:'#9b59b6'},
+    {key:'TN',unit:'mg/L',inKey:'in_TN',outKey:'out_TN',color:'#f39c12'},
+    {key:'TP',unit:'mg/L',inKey:'in_TP',outKey:'out_TP',color:'#1abc9c'},
+  ];
+  const dq=activeScenario!=='custom'?scenarioPresets[activeScenario]:null;
+  const db=document.getElementById('dashBoard');
+  let cardsHTML='',trendHTML='';
+  indicators.forEach(ind=>{
+    const inVal=dq?dq.influent[ind.key]:getVal(ind.inKey)||designData.influent[ind.key];
+    const outVal=dq?dq.effluent[ind.key]:getVal(ind.outKey)||designData.effluent[ind.key];
+    const pct=outVal>=inVal?'—':(((1-outVal/inVal)*100)).toFixed(1);
+    cardsHTML+=`<div class="gauge-card"><div class="gc-label">${ind.key} (${ind.unit})</div>
+      <div class="gc-value" style="color:${ind.color}">${outVal}</div>
+      <div class="gc-sub">进水:${inVal} | 去除率:${isNaN(pct)?pct:pct+'%'}</div></div>`;
+  });
+
+  const vol=dq?dq.vol:getVal('water_vol')||designData.dailyVol;
+  const load=dq?(vol/designData.dailyVol*designData.loadRate).toFixed(0):designData.loadRate;
+  const power=dq?dq.power:getVal('power_kwh')||designData.powerKwhPerTon*designData.dailyVol;
+  const kwhT=dq?(power/vol).toFixed(3):getVal('water_vol')?getVal('power_kwh')/getVal('water_vol'):designData.powerKwhPerTon;
+  const sludge=dq?dq.sludge:getVal('sludge_wet')||designData.sludgeProd_t_d;
+  trendHTML=`<div class="trend-row">
+    <span>📊 日处理:<b style="color:#4ecca3">${Number(vol).toLocaleString()}m³</b></span>
+    <span>负荷率:<b>${load}%</b></span>
+    <span>⚡ 吨水电耗:<b>${kwhT}度/t</b></span>
+    <span>🗑 污泥产量:<b>${sludge}t/d</b></span></div>`;
+
+  db.innerHTML=cardsHTML+trendHTML;
+}
+
+// 从调控面板同步到仪表盘
+window.updateDashFromPanel=function(p){/* already computed via buildDashboard */};
+
+// ---- 情景切换 ----
+function setupScenarios(){
+  const bar=document.getElementById('scenarios');
+  let btns='';
+  for(const[k,s]of Object.entries(scenarioPresets)){
+    btns+=`<button class="s-btn${k===activeScenario?' active':''}" onclick="switchScenario('${k}')">${s.label}</button>`;
+  }
+  bar.innerHTML=btns;
+}
+function switchScenario(key){
+  activeScenario=key;
+  document.querySelectorAll('.s-btn').forEach((b,i)=>{
+    const keys=Object.keys(scenarioPresets);
+    b.classList.toggle('active',keys[i]===key);
+  });
+  // 同步调控面板输入框
+  const s=scenarioPresets[key];
+  if(s){
+    setCtlVal('in_COD',s.influent.CODcr);setCtlVal('in_BOD',s.influent.BOD5);
+    setCtlVal('in_SS',s.influent.SS);setCtlVal('in_NH3',s.influent.NH3_N);
+    setCtlVal('in_TN',s.influent.TN);setCtlVal('in_TP',s.influent.TP);
+    setCtlVal('out_COD',s.effluent.CODcr);setCtlVal('out_BOD',s.effluent.BOD5);
+    setCtlVal('out_SS',s.effluent.SS);setCtlVal('out_NH3',s.effluent.NH3_N);
+    setCtlVal('out_TN',s.effluent.TN);setCtlVal('out_TP',s.effluent.TP);
+    setCtlVal('water_vol',s.vol);setCtlVal('power_kwh',s.power);
+    // 更新显示
+    for(const g of ctlConfig)for(const f of g.fields){
+      const el=document.querySelector(`[data-key="${f.key}"]`);
+      if(el){el.value=s[f.key]!==undefined?s[f.key]:f.val;document.getElementById('v_'+f.key).textContent=el.value;}
+    }
+    computeAndShow();
+  }
+  buildDashboard();
+}
+function setCtlVal(key,val){
+  const el=document.querySelector(`[data-key="${key}"]`);
+  if(el){el.value=val;const ve=document.getElementById('v_'+key);if(ve)ve.textContent=val;}
+}
+
+// ---- 时钟 ----
+function updateClock(){
+  const now=new Date();
+  document.getElementById('clk').textContent=now.toLocaleTimeString('zh-CN',{hour12:false})+' | '+now.toLocaleDateString('zh-CN');
+}
+
+// ---- 信息浮窗 ----
+function showInfo(text,x,y){
+  infoEl.textContent=text;infoEl.style.opacity='1';
+  setTimeout(()=>{infoEl.style.opacity='0';},2500);
+}
+
+// ============================================================
+//  初始化入口
+// ============================================================
+init3D();
+buildNav();
+buildDashboard();
+setupScenarios();
+buildControls();
+setInterval(updateClock,1000);
+updateClock();
+</script>
+</body>
+</html>
